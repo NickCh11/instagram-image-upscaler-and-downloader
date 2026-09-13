@@ -1,0 +1,19 @@
+{
+  "name": "instagram-image-upscaler-and-downloader",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "description": "On-demand Instagram image upscaling and downloading Firefox add-on.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "lint": "web-ext lint --source-dir dist",
+    "package": "npm run build && web-ext build --source-dir dist --artifacts-dir outputs --overwrite-dest"
+  },
+  "dependencies": {
+    "@websr/websr": "0.0.16"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "web-ext": "^8.7.1"
+  }
+}

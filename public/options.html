@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Instagram Image Upscaler and Downloader settings</title>
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Instagram Image Upscaler and Downloader</p>
+      <h1>Settings</h1>
+      <label for="scale">Upscale amount</label>
+      <select id="scale" name="scale">
+        <option value="2">2× — faster</option>
+        <option value="4">4× — sharper, but slower</option>
+      </select>
+      <p class="hint">4× runs the 2× AI model twice. Images are processed locally in your browser when you press Upscale.</p>
+      <p id="status" role="status" aria-live="polite"></p>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>
