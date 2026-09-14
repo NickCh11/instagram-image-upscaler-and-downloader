@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.11
+
+- Add a GitHub Actions release workflow that builds, validates, and attaches the Firefox `.xpi` and `.zip` packages to every `v*` tag.
+
 ## 1.0.10
 
 - Cancel in-progress tiled WebGPU work when the upscale modal is closed.

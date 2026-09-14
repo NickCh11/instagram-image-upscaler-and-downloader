@@ -1,6 +1,6 @@
 {
   "name": "instagram-image-upscaler-and-downloader",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "private": true,
   "license": "MIT",
   "description": "On-demand Instagram image upscaling and downloading Firefox add-on.",
