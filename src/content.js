@@ -86,6 +86,10 @@ function getImageSourceCandidates(image) {
       }
     }
   }
+  // `currentSrc` may be the small responsive variant currently rendered by
+  // Instagram. The element's original `src` is often a larger direct CDN URL.
+  // Prefer it when the page did not expose a full media record above.
+  addCandidate(image.src, Number.MAX_SAFE_INTEGER / 2, 'original image source');
   for (const item of image.srcset.split(',')) {
     const parts = item.trim().split(/\s+/);
     const descriptor = parts.at(-1) ?? '';
@@ -93,7 +97,6 @@ function getImageSourceCandidates(image) {
     addCandidate(hasWidthDescriptor ? parts.slice(0, -1).join(' ') : item.trim(), hasWidthDescriptor ? Number.parseInt(descriptor, 10) : 0, 'responsive image');
   }
   addCandidate(image.currentSrc, image.naturalWidth, 'visible image');
-  addCandidate(image.src, image.naturalWidth, 'visible image');
   return [...candidates.values()].sort((first, second) => second.width - first.width);
 }
 

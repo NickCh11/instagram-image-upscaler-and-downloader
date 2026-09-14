@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Instagram Image Upscaler and Downloader",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Upscale, inspect, and download Instagram images on demand.",
   "icons": {
     "48": "icons/icon-48.png",

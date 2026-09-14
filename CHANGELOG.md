@@ -1,7 +1,8 @@
 # Changelog
 
-## 1.0.8
+## 1.0.9
 
+- Prefer and open the image element's original `src` URL before its responsive `currentSrc` variant.
 - Load the chosen full-resolution Instagram URL through the page before processing, with extension retrieval as a fallback.
 - Show whether the rendered image used the full post media record or a fallback source.
 - Read Instagram's `image_versions2` media record to select the full signed image URL on post-detail pages.
