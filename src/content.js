@@ -396,16 +396,25 @@ function releaseGpuEngine(engine) {
   engine.network = undefined;
 }
 
-async function upscaleWithGpu(source, scale, device) {
+function throwIfUpscaleCancelled(signal) {
+  if (signal?.aborted) throw new DOMException('Upscale cancelled.', 'AbortError');
+}
+
+async function upscaleWithGpu(source, scale, device, signal) {
   let input = source;
   for (let pass = 0; pass < Math.log2(scale); pass += 1) {
     if (input instanceof HTMLCanvasElement) input = await createImageBitmap(input);
+    if (signal?.aborted) {
+      if (input instanceof ImageBitmap) input.close();
+      throwIfUpscaleCancelled(signal);
+    }
     const tileInput = input;
     const gpuCanvas = document.createElement('canvas');
     const engine = new WebSR({ network_name: 'anime4k/cnn-2x-m', weights, gpu: device, canvas: gpuCanvas });
     try {
       await engine.render(input);
       await device.queue.onSubmittedWorkDone();
+      throwIfUpscaleCancelled(signal);
       input = copyGpuCanvas(gpuCanvas);
     } finally {
       if (tileInput instanceof ImageBitmap) tileInput.close();
@@ -415,7 +424,7 @@ async function upscaleWithGpu(source, scale, device) {
   return input;
 }
 
-async function upscaleWithTiledGpu(source, scale, device, onProgress) {
+async function upscaleWithTiledGpu(source, scale, device, onProgress, signal) {
   const { width, height } = getMediaDimensions(source);
   const output = document.createElement('canvas');
   output.width = width * scale;
@@ -428,6 +437,7 @@ async function upscaleWithTiledGpu(source, scale, device, onProgress) {
 
   for (let y = 0; y < height; y += GPU_TILE_SIZE) {
     for (let x = 0; x < width; x += GPU_TILE_SIZE) {
+      throwIfUpscaleCancelled(signal);
       const coreWidth = Math.min(GPU_TILE_SIZE, width - x);
       const coreHeight = Math.min(GPU_TILE_SIZE, height - y);
       const sourceX = Math.max(0, x - GPU_TILE_OVERLAP);
@@ -443,7 +453,8 @@ async function upscaleWithTiledGpu(source, scale, device, onProgress) {
       if (!tileContext) throw new Error('The browser could not create a GPU tile.');
       tileContext.drawImage(source, sourceX, sourceY, tileWidth, tileHeight, 0, 0, tileWidth, tileHeight);
       const tileSource = await createImageBitmap(tileCanvas);
-      const upscaledTile = await upscaleWithGpu(tileSource, scale, device);
+      const upscaledTile = await upscaleWithGpu(tileSource, scale, device, signal);
+      throwIfUpscaleCancelled(signal);
       const cropX = (x - sourceX) * scale;
       const cropY = (y - sourceY) * scale;
       outputContext.drawImage(upscaledTile, cropX, cropY, coreWidth * scale, coreHeight * scale, x * scale, y * scale, coreWidth * scale, coreHeight * scale);
@@ -525,14 +536,17 @@ async function showUpscaleModal(image, scale) {
     applyScale.disabled = true;
     downloadButton.disabled = true;
     const progress = showProgress(usingGpu ? `Preparing ${selectedScale}× tiled GPU upscale…` : `Preparing ${selectedScale}× CPU upscale…`);
+    const controller = new AbortController();
+    renderController = controller;
     try {
       const nextOutput = usingGpu
         ? await upscaleWithTiledGpu(original, selectedScale, device, (completed, total) => {
           progress.textContent = `GPU upscale ${selectedScale}× · tile ${completed}/${total}`;
-        })
+        }, controller.signal)
         : upscaleWithCpu(original, selectedScale);
       showOutput(nextOutput);
     } catch (error) {
+      if (controller.signal.aborted) return;
       const message = error instanceof Error ? error.message : 'The image could not be upscaled.';
       progress.remove();
       if (output) {
@@ -547,6 +561,7 @@ async function showUpscaleModal(image, scale) {
       }
       applyScale.disabled = false;
     } finally {
+      if (renderController === controller) renderController = undefined;
       if (cleanupPending || !modal.isConnected) releaseResources();
     }
   };

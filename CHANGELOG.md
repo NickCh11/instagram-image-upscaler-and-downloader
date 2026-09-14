@@ -1,7 +1,8 @@
 # Changelog
 
-## 1.0.9
+## 1.0.10
 
+- Cancel in-progress tiled WebGPU work when the upscale modal is closed.
 - Prefer and open the image element's original `src` URL before its responsive `currentSrc` variant.
 - Load the chosen full-resolution Instagram URL through the page before processing, with extension retrieval as a fallback.
 - Show whether the rendered image used the full post media record or a fallback source.
