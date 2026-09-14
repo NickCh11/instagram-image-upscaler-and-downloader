@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Instagram Image Upscaler and Downloader",
-  "version": "1.0.0",
+  "version": "1.0.8",
   "description": "Upscale, inspect, and download Instagram images on demand.",
   "icons": {
     "48": "icons/icon-48.png",
@@ -12,7 +12,8 @@
     "storage",
     "https://www.instagram.com/*",
     "https://*.instagram.com/*",
-    "https://*.cdninstagram.com/*"
+    "https://*.cdninstagram.com/*",
+    "https://*.fbcdn.net/*"
   ],
   "background": {
     "scripts": ["background.js"]

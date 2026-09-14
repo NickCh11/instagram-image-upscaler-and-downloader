@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.8
+
+- Load the chosen full-resolution Instagram URL through the page before processing, with extension retrieval as a fallback.
+- Show whether the rendered image used the full post media record or a fallback source.
+- Read Instagram's `image_versions2` media record to select the full signed image URL on post-detail pages.
+- Release the temporary WebGPU resources after every tile, preventing stale or unchanged results on high-resolution posts.
+- Use WebSR's stronger CNN-M real-life model for clearer photographic detail enhancement.
+- Allow Instagram post media served from Facebook's CDN, so it can use WebGPU rather than the CPU fallback.
+- Prefer the highest-resolution Instagram `srcset` image for WebSR processing.
+- Retry lower-resolution Instagram image sources if the preferred source is unavailable.
+
 ## 1.0.0
 
 - First public release.

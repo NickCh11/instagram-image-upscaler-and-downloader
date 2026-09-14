@@ -1,5 +1,5 @@
 import WebSR from '@websr/websr/src/main.ts';
-import weights from '@websr/websr/weights/anime4k/cnn-2x-s-rl.json';
+import weights from '@websr/websr/weights/anime4k/cnn-2x-m-rl.json';
 
 const api = globalThis.browser ?? globalThis.chrome;
 const IMAGE_SELECTOR = 'article img[src], img[src*="cdninstagram"]';
@@ -42,13 +42,98 @@ function removeButton(image) {
   processed.delete(image);
 }
 
+function getImageSourceCandidates(image) {
+  const candidates = new Map();
+  const addCandidate = (value, width = 0, source = 'visible image') => {
+    if (!value) return;
+    try {
+      const url = new URL(value, document.baseURI).href;
+      const existing = candidates.get(url);
+      if (!existing || width >= existing.width) candidates.set(url, { url, width, source });
+    } catch {
+      // Ignore malformed responsive-image candidates and continue with the visible source.
+    }
+  };
+  let filename = '';
+  try {
+    filename = new URL(image.currentSrc || image.src, document.baseURI).pathname.split('/').at(-1) ?? '';
+  } catch {
+    // The DOM candidates below remain available when the visible URL is malformed.
+  }
+  if (filename) {
+    const visited = new Set();
+    const visit = (value) => {
+      if (!value || typeof value !== 'object' || visited.has(value)) return;
+      visited.add(value);
+      const mediaCandidates = value.image_versions2?.candidates;
+      if (Array.isArray(mediaCandidates)) {
+        mediaCandidates.forEach((candidate, index) => {
+          if (typeof candidate?.url === 'string' && candidate.url.includes(filename)) {
+            // Instagram orders this list from the original/full media first.
+            addCandidate(candidate.url, Number.MAX_SAFE_INTEGER - index, 'full post media');
+          }
+        });
+      }
+      for (const nestedValue of Object.values(value)) visit(nestedValue);
+    };
+    for (const script of document.scripts) {
+      const text = script.textContent;
+      if (!text?.includes(filename) || !text.includes('image_versions2')) continue;
+      try {
+        visit(JSON.parse(text));
+      } catch {
+        // Instagram also uses non-JSON scripts; the DOM candidates remain available.
+      }
+    }
+  }
+  for (const item of image.srcset.split(',')) {
+    const parts = item.trim().split(/\s+/);
+    const descriptor = parts.at(-1) ?? '';
+    const hasWidthDescriptor = /^\d+w$/.test(descriptor);
+    addCandidate(hasWidthDescriptor ? parts.slice(0, -1).join(' ') : item.trim(), hasWidthDescriptor ? Number.parseInt(descriptor, 10) : 0, 'responsive image');
+  }
+  addCandidate(image.currentSrc, image.naturalWidth, 'visible image');
+  addCandidate(image.src, image.naturalWidth, 'visible image');
+  return [...candidates.values()].sort((first, second) => second.width - first.width);
+}
+
+async function loadPageImageBitmap(url) {
+  const pageImage = new Image();
+  pageImage.crossOrigin = 'anonymous';
+  pageImage.src = url;
+  await pageImage.decode();
+  if (pageImage.naturalWidth < 1 || pageImage.naturalHeight < 1) {
+    throw new Error('The page could not load the source image.');
+  }
+  return createImageBitmap(pageImage);
+}
+
 async function getCleanImageBitmap(image) {
-  const response = await api.runtime.sendMessage({
-    type: 'fetch-instagram-image',
-    url: image.currentSrc || image.src
-  });
-  if (!response?.bytes) throw new Error('The extension could not retrieve the source image.');
-  return createImageBitmap(new Blob([response.bytes], { type: response.contentType }));
+  let lastError = new Error('The extension could not retrieve the source image.');
+  for (const candidate of getImageSourceCandidates(image)) {
+    try {
+      return {
+        bitmap: await loadPageImageBitmap(candidate.url),
+        source: `${candidate.source} via page`
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error : lastError;
+    }
+    try {
+      const response = await api.runtime.sendMessage({
+        type: 'fetch-instagram-image',
+        url: candidate.url
+      });
+      if (!response?.bytes) throw lastError;
+      return {
+        bitmap: await createImageBitmap(new Blob([response.bytes], { type: response.contentType })),
+        source: `${candidate.source} via extension`
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error : lastError;
+    }
+  }
+  throw lastError;
 }
 
 function getAnchor(image) {
@@ -282,16 +367,47 @@ async function downloadCanvas(canvas) {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
+function copyGpuCanvas(canvas) {
+  const copy = document.createElement('canvas');
+  copy.width = canvas.width;
+  copy.height = canvas.height;
+  const context = copy.getContext('2d');
+  if (!context) throw new Error('The browser could not copy the GPU result.');
+  context.drawImage(canvas, 0, 0);
+  return copy;
+}
+
+function releaseGpuEngine(engine) {
+  // WebSR owns buffers for one render, but its public destroy() method also
+  // destroys the shared GPU device. Release only per-engine resources so the
+  // next tile can use the same device without retaining every prior tile.
+  const context = engine.context;
+  if (!context) return;
+  for (const buffer of Object.values(context.buffers)) buffer.destroy();
+  for (const [name, texture] of Object.entries(context.textures)) {
+    if (name !== 'output') texture.destroy();
+  }
+  context.context.unconfigure();
+  engine.context = undefined;
+  engine.renderer = undefined;
+  engine.network = undefined;
+}
+
 async function upscaleWithGpu(source, scale, device) {
   let input = source;
   for (let pass = 0; pass < Math.log2(scale); pass += 1) {
     if (input instanceof HTMLCanvasElement) input = await createImageBitmap(input);
-    const canvas = document.createElement('canvas');
-    const engine = new WebSR({ network_name: 'anime4k/cnn-2x-s', weights, gpu: device, canvas });
-    await engine.render(input);
-    await device.queue.onSubmittedWorkDone();
-    if (input instanceof ImageBitmap) input.close();
-    input = canvas;
+    const tileInput = input;
+    const gpuCanvas = document.createElement('canvas');
+    const engine = new WebSR({ network_name: 'anime4k/cnn-2x-m', weights, gpu: device, canvas: gpuCanvas });
+    try {
+      await engine.render(input);
+      await device.queue.onSubmittedWorkDone();
+      input = copyGpuCanvas(gpuCanvas);
+    } finally {
+      if (tileInput instanceof ImageBitmap) tileInput.close();
+      releaseGpuEngine(engine);
+    }
   }
   return input;
 }
@@ -347,6 +463,7 @@ async function showUpscaleModal(image, scale) {
   let original;
   let selectedScale = scale;
   let usingGpu = false;
+  let sourceLabel = 'visible image';
   let device = false;
   let cpuFallbackReason = 'GPU unavailable';
   let renderController;
@@ -389,7 +506,7 @@ async function showUpscaleModal(image, scale) {
     const { width, height } = getMediaDimensions(original);
     const result = `${width}×${height} → ${output.width}×${output.height}`;
     title.textContent = usingGpu
-      ? `WebSR v0.0.16 · WebGPU · ${selectedScale}× · ${result}`
+      ? `WebSR v0.0.16 · WebGPU · CNN-M · ${sourceLabel} · ${selectedScale}× · ${result}`
       : `CPU fallback (${cpuFallbackReason}) · ${selectedScale}× · ${result}`;
     title.title = title.textContent;
     applyScale.disabled = false;
@@ -436,10 +553,11 @@ async function showUpscaleModal(image, scale) {
     try {
       const cleanImage = await getCleanImageBitmap(image);
       if (!modal.isConnected) {
-        cleanImage.close();
+        cleanImage.bitmap.close();
         return;
       }
-      original = cleanImage;
+      original = cleanImage.bitmap;
+      sourceLabel = cleanImage.source;
     } catch {
       cpuFallbackReason = 'image access blocked';
     }

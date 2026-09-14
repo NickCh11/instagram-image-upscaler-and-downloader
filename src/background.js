@@ -2,7 +2,12 @@ const api = globalThis.browser ?? globalThis.chrome;
 
 function isInstagramCdnHost(hostname) {
   const host = hostname.toLowerCase();
-  return host === 'cdninstagram.com' || host.endsWith('.cdninstagram.com');
+  // Instagram serves post media from both its own CDN domain and Facebook's
+  // CDN. The latter is common for the full post view.
+  return host === 'cdninstagram.com'
+    || host.endsWith('.cdninstagram.com')
+    || host === 'fbcdn.net'
+    || host.endsWith('.fbcdn.net');
 }
 
 api.runtime.onInstalled.addListener(async () => {
