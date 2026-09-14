@@ -24,11 +24,23 @@ Images are processed in the browser. The extension does not upload images to an 
 ## Requirements
 
 - Firefox Desktop 140 or newer.
-- Node.js 24.14.0 and npm 11.12.0 for local development.
 
 Firefox for Android is not currently supported by the public listing.
 
-## Development
+## Install the ready-made extension
+
+The easiest way to try the extension is to use the prebuilt package from [GitHub Releases](https://github.com/NickCh11/instagram-image-upscaler-and-downloader/releases/latest). No source code, Node.js, or build command is needed.
+
+1. Open the latest release and download the `.xpi` file.
+2. In Firefox, open `about:debugging#/runtime/this-firefox`.
+3. Click **Load Temporary Add-on…** and select the downloaded `.xpi` file.
+4. Open an Instagram post and hover over a large photo to find the **✦ Upscale** button.
+
+Temporary add-ons are removed when Firefox restarts. The GitHub package is intended for temporary testing; for a permanent installation, use the Mozilla Add-ons listing once the corresponding version has been reviewed and published.
+
+## Build from source (development)
+
+Node.js 24.14.0 and npm 11.12.0 are required only when developing or building the extension yourself.
 
 ```sh
 npm ci
@@ -38,7 +50,7 @@ npm run lint
 
 The generated extension files are written to `dist/`.
 
-## Try it temporarily in Firefox
+## Load a source build temporarily
 
 Use these steps to try the extension locally without permanently installing it:
 
